@@ -48,3 +48,24 @@ For the above configuration the event console display will be like:
 On clicking additional field, logtrail will automatically search for log messages matching the value of the field. For example on clicking the pid `16545` in above message, logtrail will search for all message whose pid is `16545` in this index.
 
 Logtrail uses Handlebar templates to replace the fields in `message_format` with actual values. `{{{field_name}}}` will add field with hyperlink. `{{field_name}}` will add field without hyperlink. `{{[nested.field]}}` should be used to add nested fields.
+
+
+### Caveats
+
+#### Nested fields
+
+Some fields may appear as nested in Kibana while actually they are not. When displaying a document in "table view" in Kibana, these 2 fields will be displayed the same way :  
+- log.level
+- [log][level] (following Logstash syntax)
+
+When displaying the document in json view, you'll see clearly the difference though.
+
+If you configure Logtrail as below :
+
+    "message_format": "{{{log.level}}} - {{{message}}}"
+
+It will work **only** if log.level is really nested (ie [log][level]). It will not work if your documents have a simple field named "log.level". 
+
+See this [issue](https://github.com/sivasamyk/logtrail/issues/387) for more infos. 
+
+

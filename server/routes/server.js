@@ -1,3 +1,44 @@
+var dateformat = require('dateformat');
+
+/**
+ * Takes a pattern of the form blah-
+ * and converts it into a list of indexes with dates appended
+ */
+function toDatedIndexPattern(prefix, start, days, as) {
+  // alias
+  var self = this;
+
+  // sanity checks
+  if ((!prefix) || (!start) || (days < 0))
+    return;
+
+  // remove the star at the end
+  prefix = prefix.replace('*','');
+
+  // default
+  as = (as) ? as : 'string';
+
+  // indexes we care about
+  var indexes = [];
+
+  // how many millis are in one day          
+  var DAY = 86400000;          
+
+  // add the number of days
+  for (var index=0; index<days; index++) {
+    var date = new Date(start.getTime() + (index * DAY));
+    
+    // the 3rd arg 'true' ensures that we keep the date in UTC instead of local time
+    var indexname = prefix + dateformat(date, 'yyyy.mm.dd', true);
+    
+    // add to set of indices
+    indexes.push(indexname);
+  }
+
+  // return content
+  return as == 'string' ? indexes.join(',') : indexes;
+}
+
 function getMessageTemplate(handlebar, selectedConfig) {
   var messageFormat = selectedConfig.fields.message_format;
   //Append <a> tags for click to message format except for message field
@@ -233,8 +274,25 @@ module.exports = function (server) {
     handler: async function (request, h) {
       const { callWithRequest } = server.plugins.elasticsearch.getCluster('data');
       var selectedConfig = request.payload.config;
-      var index = request.payload.index;
-      
+      var index = request.payload.index ? request.payload.index : selectedConfig.es.default_index;
+
+      // how many millis are in one day
+      var DAY = 86400000;
+
+      // seek region
+      var start = null;
+      var indexes = null;
+      var seek = (request.payload && request.payload.seek) ? request.payload.seek : null;
+      if (seek) {
+          // shrink down the number of indexes we will look at
+          start = new Date(seek - Math.floor((DAY * selectedConfig.default_time_range_in_days) / 2 ));
+          indexes = toDatedIndexPattern(index, start, selectedConfig.default_time_range_in_days+1, 'string');
+      } else {
+          // shrink down the number of indexes we will look at
+          start = new Date(new Date().getTime() - (DAY * selectedConfig.default_time_range_in_days));
+          indexes = toDatedIndexPattern(index, start, selectedConfig.default_time_range_in_days+1, 'string');
+      }
+
       var hostnameField = selectedConfig.fields.mapping.hostname;
       let keywordSuffix = selectedConfig.fields.keyword_suffix;
       if (keywordSuffix == undefined) {
@@ -243,7 +301,8 @@ module.exports = function (server) {
         hostnameField += ('.' + keywordSuffix);
       }
       var hostAggRequest = {
-        index: selectedConfig.es.default_index,
+        index: indexes || index,
+        ignore_unavailable:true,
         body : {
           size: 0,
           aggs: {
@@ -262,13 +321,13 @@ module.exports = function (server) {
           return {
             ok: false,
             resp: {
-              msg: 'Check if the index pattern ' + selectedConfig.es.default_index + ' exists'
+              msg: 'Check if the index pattern ' + index + ' exists'
             }
           };
         }
         return {
           ok: true,
-          resp: resp.aggregations.hosts.buckets
+          resp: resp.aggregations.hosts ? resp.aggregations.hosts.buckets : []
         };
       } catch(e) {
         console.error('Error while fetching hosts',e);

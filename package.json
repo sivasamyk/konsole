@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "ansi-to-html": "^0.6.4",
+    "dateformat": "^4.5.1",
     "handlebars": "4.0.14",
     "lodash": "4.17.13",
     "moment": "2.22.2",

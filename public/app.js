@@ -381,7 +381,9 @@ app.controller('logtrail', function ($scope, kbnUrl, $route, $routeParams,
       $scope.userDateTimeSeeked = null;
     }
     angular.element('#date-picker').addClass('ng-hide');
-    $scope.onSearchClick();
+    setupHostsList().then(function() {
+      $scope.onSearchClick();
+    });
   };
 
   $scope.onSettingsChange = function () {
@@ -523,8 +525,11 @@ app.controller('logtrail', function ($scope, kbnUrl, $route, $routeParams,
 
   function setupHostsList() {
     var params = {
-      config: selectedIndexConfig
+      config: selectedIndexConfig,
+      index: selectedIndexConfig.es.default_index,
     };
+    if ($scope.pickedDateTime)
+      params.seek = Date.create($scope.pickedDateTime).getTime();
     return new Promise((resolve, reject) => {
       $http.post(chrome.addBasePath('/logtrail/hosts'),params).then(function (resp) {
         if (resp.data.ok) {
